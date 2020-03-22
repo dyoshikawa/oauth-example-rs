@@ -2,7 +2,6 @@ use actix_web::{error, middleware, web, App, Error, HttpResponse, HttpServer};
 use std::collections::HashMap;
 use tera::Tera;
 
-// store tera template in application state
 async fn index(
     tmpl: web::Data<tera::Tera>,
     query: web::Query<HashMap<String, String>>,
