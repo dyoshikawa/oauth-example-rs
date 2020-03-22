@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>OAuth Authorization Server</title>
+</head>
+<body>
+<h1>OAuth Authorization Server</h1>
+
+<h2>Client information:</h2>
+<ul>
+    <li>client_id: <span>{{ client_id }}</span></li>
+    <li>client_secret: <span>{{ client_secret }}</span></li>
+    <li>scope: <span>{{ scope }}</span></li>
+    <li>redirect_uri: <span>{{ redirect_uri }}</span></li>
+</ul>
+
+<h2>Server information:</h2>
+<ul>
+    <li><a href="http://localhost:9001/authorize">authorization_endpoint</a></li>
+    <li><a href="http://localhost:9001/token">token_endpoint</a></li>
+</ul>
+</body>
+</html>

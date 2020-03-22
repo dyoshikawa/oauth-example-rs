@@ -30,7 +30,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::Logger::default()) // enable logger
             .service(web::resource("/").route(web::get().to(index)))
     })
-    .bind("127.0.0.1:8080")?
+    .bind("localhost:9000")?
     .run()
     .await
 }
