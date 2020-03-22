@@ -1,6 +1,6 @@
 use actix_web::{error, middleware, web, App, Error, HttpResponse, HttpServer};
 use std::collections::HashMap;
-use tera::{Map, Tera};
+use tera::Tera;
 
 #[derive(Debug, Clone, PartialEq)]
 struct Client {
@@ -24,6 +24,15 @@ fn constants() -> Constants {
             scope: "foo bar".to_string(),
         }],
     }
+}
+
+fn is_different_scope(rscope: Vec<String>, cscope: Vec<String>) -> bool {
+    for s in rscope.into_iter() {
+        if !cscope.contains(&s) {
+            return false;
+        }
+    }
+    true
 }
 
 async fn index(tmpl: web::Data<tera::Tera>) -> Result<HttpResponse, Error> {
@@ -55,26 +64,28 @@ async fn authorize(
                 Err(error::ErrorInternalServerError("Invalid redirect URI"))
             } else {
                 let rscope_str = query.get("scope").cloned().unwrap_or("".to_string());
-                let rscope: Vec<&str> = rscope_str.split(' ').collect::<Vec<_>>();
-                let cscope: Vec<&str> = client.scope.split(' ').collect::<Vec<_>>();
+                let rscope: Vec<String> = rscope_str
+                    .split(' ')
+                    .collect::<Vec<_>>()
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>();
+                let cscope: Vec<String> = client
+                    .scope
+                    .split(' ')
+                    .collect::<Vec<_>>()
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>();
 
-                if rscope != cscope {
+                if is_different_scope(rscope.clone(), cscope.clone()) {
                     return Err(error::ErrorInternalServerError("Invalid scope"));
                 }
 
                 let mut ctx = tera::Context::new();
-                let mut m = Map::new();
-                m.insert("client_id".to_string(), client.client_id.parse().unwrap());
-                m.insert(
-                    "clinet_secret".to_string(),
-                    client.client_secret.parse().unwrap(),
-                );
-                m.insert(
-                    "redirect_uris".to_string(),
-                    client.redirect_uris.join(" ").parse().unwrap(),
-                );
-                m.insert("scope".to_string(), client.scope.parse().unwrap());
-                ctx.insert("client", &m);
+                ctx.insert("client_id", &client.client_id);
+                ctx.insert("client_secret", &client.client_secret);
+                ctx.insert("redirect_uris", &client.redirect_uris);
                 ctx.insert("reqid", "ランダム文字列");
                 ctx.insert("scope", &rscope);
 
