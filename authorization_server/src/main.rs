@@ -1,10 +1,7 @@
 use actix_web::{error, middleware, web, App, Error, HttpResponse, HttpServer};
-use std::collections::HashMap;
 use tera::Tera;
 
-async fn index(
-    tmpl: web::Data<tera::Tera>,
-) -> Result<HttpResponse, Error> {
+async fn index(tmpl: web::Data<tera::Tera>) -> Result<HttpResponse, Error> {
     let mut ctx = tera::Context::new();
     ctx.insert("client_id", "oauth-client-1");
     ctx.insert("client_secret", "oauth-client-secret-1");
