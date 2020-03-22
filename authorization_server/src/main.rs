@@ -1,8 +1,8 @@
 use actix_web::{error, middleware, web, App, Error, HttpResponse, HttpServer};
 use std::collections::HashMap;
-use tera::Tera;
+use tera::{Map, Tera};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct Client {
     client_id: String,
     client_secret: String,
@@ -42,10 +42,50 @@ async fn authorize(
     tmpl: web::Data<tera::Tera>,
     query: web::Query<HashMap<String, String>>,
 ) -> Result<HttpResponse, Error> {
-    query.get("response_type");
-    query.get("client_id");
-    query.get("redirect_uri");
-    Ok(HttpResponse::Ok().content_type("text/html").body(s))
+    let client_id = query.get("client_id").cloned().unwrap_or("".to_string());
+    let client = constants()
+        .clients
+        .into_iter()
+        .find(|c| c.client_id == *client_id);
+    match client {
+        None => Err(error::ErrorInternalServerError("Unknown client")),
+        Some(client) => {
+            let redirect_uri = query.get("redirect_uri").cloned().unwrap_or("".to_string());
+            if !client.redirect_uris.contains(&redirect_uri) {
+                Err(error::ErrorInternalServerError("Invalid redirect URI"))
+            } else {
+                let rscope_str = query.get("scope").cloned().unwrap_or("".to_string());
+                let rscope: Vec<&str> = rscope_str.split(' ').collect::<Vec<_>>();
+                let cscope: Vec<&str> = client.scope.split(' ').collect::<Vec<_>>();
+
+                if rscope != cscope {
+                    return Err(error::ErrorInternalServerError("Invalid scope"));
+                }
+
+                let mut ctx = tera::Context::new();
+                let mut m = Map::new();
+                m.insert("client_id".to_string(), client.client_id.parse().unwrap());
+                m.insert(
+                    "clinet_secret".to_string(),
+                    client.client_secret.parse().unwrap(),
+                );
+                m.insert(
+                    "redirect_uris".to_string(),
+                    client.redirect_uris.join(" ").parse().unwrap(),
+                );
+                m.insert("scope".to_string(), client.scope.parse().unwrap());
+                ctx.insert("client", &m);
+                ctx.insert("reqid", "ランダム文字列");
+                ctx.insert("scope", &rscope);
+
+                let s = tmpl
+                    .render("approve.html", &ctx)
+                    .map_err(|e| error::ErrorInternalServerError(e))?;
+
+                Ok(HttpResponse::Ok().content_type("text/html").body(s))
+            }
+        }
+    }
 }
 
 #[actix_rt::main]
