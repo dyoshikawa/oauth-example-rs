@@ -1,12 +1,20 @@
 use actix_web::{error, middleware, web, App, Error, HttpResponse, HttpServer};
+use std::collections::HashMap;
 use tera::Tera;
 
 // store tera template in application state
 async fn index(
     tmpl: web::Data<tera::Tera>,
+    query: web::Query<HashMap<String, String>>,
 ) -> Result<HttpResponse, Error> {
+    let mut ctx = tera::Context::new();
+    ctx.insert(
+        "access_token",
+        query.get("access_token").unwrap_or(&"None".to_string()),
+    );
+    ctx.insert("scope", query.get("scope").unwrap_or(&"None".to_string()));
     let s = tmpl
-        .render("index.html", &tera::Context::new())
+        .render("index.html", &ctx)
         .map_err(|e| error::ErrorInternalServerError(e))?;
     Ok(HttpResponse::Ok().content_type("text/html").body(s))
 }

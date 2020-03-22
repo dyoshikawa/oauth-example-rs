@@ -2,9 +2,17 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>OAuth Client</title>
 </head>
 <body>
-    test
+    <h1>OAuth Client</h1>
+    <ul>
+        <li>Access token value: <span>{{ access_token }}</span></li>
+        <li>Scope value: <span>{{ scope }}</span></li>
+    </ul>
+    <ul>
+        <li><a href="/authorize">Get Auth Token</a></li>
+        <li><a href="/fetch_resource">Get Protected Resource</a></li>
+    </ul>
 </body>
 </html>
