@@ -1,0 +1,2 @@
+[workspace]
+members = ["authorization_server", "protected_resource", "client"]
