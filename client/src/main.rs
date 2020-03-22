@@ -36,10 +36,16 @@ async fn index(
 }
 
 async fn authorize() -> Result<HttpResponse, Error> {
-    let target_uri =
-        Url::parse_with_params(constants().authorize_uri.as_str(), vec![("test", "test")])
-            .map_err(|e| error::ErrorInternalServerError(e))?
-            .to_string();
+    let target_uri = Url::parse_with_params(
+        constants().authorize_uri.as_str(),
+        vec![
+            ("response_type", "code"),
+            ("client_id", constants().client_id.as_str()),
+            ("redirect_uri", constants().redirect_uris[0].as_str()),
+        ],
+    )
+    .map_err(|e| error::ErrorInternalServerError(e))?
+    .to_string();
 
     Ok(HttpResponse::TemporaryRedirect()
         .header(header::LOCATION, target_uri)
