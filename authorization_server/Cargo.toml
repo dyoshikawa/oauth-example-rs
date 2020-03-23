@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 actix-web = "2"
 actix-rt = "1"
+base64 = "*"
 tera = "*"
 redis = "*"
 redis_client = { path = "../redis_client" }
