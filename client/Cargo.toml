@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 actix-web = "2"
 actix-rt = "1"
+base64 = "*"
 tera = "*"
 url = "*"
 serde = { version = "1.0", features = ["derive"] }

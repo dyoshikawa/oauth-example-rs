@@ -1,4 +1,5 @@
 use actix_web::{error, http::header, middleware, web, App, Error, HttpResponse, HttpServer};
+use base64::encode;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
@@ -10,6 +11,7 @@ struct Constants {
     authorize_endpoint: String,
     token_endpoint: String,
     client_id: String,
+    client_secret: String,
     redirect_uris: Vec<String>,
 }
 
@@ -18,6 +20,7 @@ fn constants() -> Constants {
         authorize_endpoint: "http://localhost:9001/authorize".to_string(),
         token_endpoint: "http://localhost:9001/token".to_string(),
         client_id: "oauth-client-1".to_string(),
+        client_secret: "oauth-client-secret-1".to_string(),
         redirect_uris: vec!["http://localhost:9000/callback".to_string()],
     }
     .clone()
@@ -27,6 +30,7 @@ async fn index(
     tmpl: web::Data<tera::Tera>,
     query: web::Query<HashMap<String, String>>,
 ) -> Result<HttpResponse, Error> {
+    println!("Access index");
     let mut ctx = tera::Context::new();
     ctx.insert(
         "access_token",
@@ -54,6 +58,10 @@ async fn authorize() -> Result<HttpResponse, Error> {
     Ok(HttpResponse::TemporaryRedirect()
         .header(header::LOCATION, target_uri)
         .finish())
+}
+
+fn encode_client_credentials(client_id: String, client_secret: String) -> String {
+    encode(&format!("{}:{}", client_id, client_secret))
 }
 
 #[derive(Serialize, Deserialize)]
@@ -90,11 +98,17 @@ async fn callback(
             let token_res = req_client
                 .post(constants().token_endpoint.clone().as_str())
                 .header(header::CONTENT_TYPE, "application/json")
-                .header(header::AUTHORIZATION, format!("Basic {}", "").as_str())
+                .header(
+                    header::AUTHORIZATION,
+                    format!(
+                        "Basic {}",
+                        encode_client_credentials(constants().client_id, constants().client_secret)
+                    )
+                    .as_str(),
+                )
                 .body(post_data)
                 .send()
                 .map_err(|e| error::ErrorInternalServerError(e))?;
-
             let parsed_res: HashMap<String, String> =
                 token_res
                     .json::<HashMap<String, String>>()
