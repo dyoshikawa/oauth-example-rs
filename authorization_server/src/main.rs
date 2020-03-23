@@ -195,33 +195,33 @@ async fn approve(body: web::Form<HashMap<String, String>>) -> Result<HttpRespons
     }
 }
 
-// #[derive(Serialize, Deserialize)]
-// struct TokenResponse {
-//     access_token: String,
-//     token_type: String,
-//     scope: Vec<String>,
-// }
+#[derive(Serialize, Deserialize)]
+struct TokenResponse {
+    access_token: String,
+    token_type: String,
+    scope: Vec<String>,
+}
 
-// async fn token(query: web::Query<HashMap<String, String>>) -> Result<HttpResponse, Error> {
-//     let auth = query
-//         .get("authorization")
-//         .cloned()
-//         .unwrap_or("".to_string());
-//     if auth != "".to_string() {
-//         let client_credentials = auth
-//             .split(' ')
-//             .collect::<Vec<&str>>()
-//             .iter()
-//             .map(|s| s.to_string())
-//             .collect::<Vec<String>>();
-//     }
-//     let token_response = TokenResponse {
-//         access_token: "".to_string(),
-//         token_type: "".to_string(),
-//         scope: vec!["".to_string()],
-//     };
-//     Ok(HttpResponse::Ok().json(token_response))
-// }
+async fn token(query: web::Query<HashMap<String, String>>) -> Result<HttpResponse, Error> {
+    let auth = query
+        .get("authorization")
+        .cloned()
+        .unwrap_or("".to_string());
+    if auth != "".to_string() {
+        let client_credentials = auth
+            .split(' ')
+            .collect::<Vec<&str>>()
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<String>>();
+    }
+    let token_response = TokenResponse {
+        access_token: "".to_string(),
+        token_type: "".to_string(),
+        scope: vec!["".to_string()],
+    };
+    Ok(HttpResponse::Ok().json(token_response))
+}
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
@@ -236,6 +236,7 @@ async fn main() -> std::io::Result<()> {
             .service(web::resource("/").route(web::get().to(index)))
             .service(web::resource("/authorize").route(web::get().to(authorize)))
             .service(web::resource("/approve").route(web::post().to(approve)))
+            .service(web::resource("/token").route(web::post().to(token)))
     })
     .bind("localhost:9001")?
     .run()
