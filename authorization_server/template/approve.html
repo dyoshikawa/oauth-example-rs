@@ -12,5 +12,20 @@
     <li>ID: {{ client_id }}</li>
 </ul>
 
+<form class="form" action="/approve" method="POST">
+    <input type="hidden" name="reqid" value="{{ reqid }}">
+    {% if scope %}
+    <p>The client is requesting access to the following:</p>
+    <ul>
+        {% for s in scope %}
+        <li><input type="checkbox" name="scope_{{ s }}" id="scope_{{ s }}" checked="checked"><label for="scope_{{ s }}">{{
+            s }}</label></li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    <input type="submit" class="" name="approve" value="Approve">
+    <input type="submit" class="" name="deny" value="Deny">
+</form>
+
 </body>
 </html>

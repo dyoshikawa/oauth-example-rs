@@ -1,6 +1,10 @@
 use actix_web::{error, middleware, web, App, Error, HttpResponse, HttpServer};
 use std::collections::HashMap;
 use tera::Tera;
+use uuid::Uuid;
+use redis_client::create_connection;
+use redis::Commands;
+use serde_json;
 
 #[derive(Debug, Clone, PartialEq)]
 struct Client {
@@ -29,10 +33,10 @@ fn constants() -> Constants {
 fn is_different_scope(rscope: Vec<String>, cscope: Vec<String>) -> bool {
     for s in rscope.into_iter() {
         if !cscope.contains(&s) {
-            return false;
+            return true;
         }
     }
-    true
+    false
 }
 
 async fn index(tmpl: web::Data<tera::Tera>) -> Result<HttpResponse, Error> {
@@ -66,37 +70,55 @@ async fn authorize(
                 let rscope_str = query.get("scope").cloned().unwrap_or("".to_string());
                 let rscope: Vec<String> = rscope_str
                     .split(' ')
-                    .collect::<Vec<_>>()
-                    .iter()
+                    .collect::<Vec<&str>>()
+                    .into_iter()
+                    .filter(|s| s != &"")
                     .map(|s| s.to_string())
-                    .collect::<Vec<_>>();
+                    .collect::<Vec<String>>();
                 let cscope: Vec<String> = client
                     .scope
                     .split(' ')
-                    .collect::<Vec<_>>()
-                    .iter()
+                    .collect::<Vec<&str>>()
+                    .into_iter()
+                    .filter(|s| s != &"")
                     .map(|s| s.to_string())
-                    .collect::<Vec<_>>();
-
+                    .collect::<Vec<String>>();
                 if is_different_scope(rscope.clone(), cscope.clone()) {
                     return Err(error::ErrorInternalServerError("Invalid scope"));
                 }
+
+                let reqid = format!("request_{}", Uuid::new_v4());
+                let mut redis_con = create_connection();
+                let v = serde_json::to_string(&query.into_inner()).unwrap();
+                let _: () = redis_con.set(&reqid, v).unwrap();
 
                 let mut ctx = tera::Context::new();
                 ctx.insert("client_id", &client.client_id);
                 ctx.insert("client_secret", &client.client_secret);
                 ctx.insert("redirect_uris", &client.redirect_uris);
-                ctx.insert("reqid", "ランダム文字列");
+                ctx.insert("reqid", &reqid);
                 ctx.insert("scope", &rscope);
-
-                let s = tmpl
-                    .render("approve.html", &ctx)
-                    .map_err(|e| error::ErrorInternalServerError(e))?;
-
-                Ok(HttpResponse::Ok().content_type("text/html").body(s))
+                Ok(HttpResponse::Ok().content_type("text/html").body(
+                    tmpl.render("approve.html", &ctx)
+                        .map_err(|e| error::ErrorInternalServerError(e))?,
+                ))
             }
         }
     }
+}
+
+async fn approve(
+    tmpl: web::Data<tera::Tera>,
+    body: web::Form<HashMap<String, String>>,
+) -> Result<HttpResponse, Error> {
+    println!("{:?}", body);
+
+    let mut ctx = tera::Context::new();
+    let s = tmpl
+        .render("approve.html", &ctx)
+        .map_err(|e| error::ErrorInternalServerError(e))?;
+
+    Ok(HttpResponse::Ok().content_type("text/html").body(s))
 }
 
 #[actix_rt::main]
@@ -111,6 +133,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::Logger::default()) // enable logger
             .service(web::resource("/").route(web::get().to(index)))
             .service(web::resource("/authorize").route(web::get().to(authorize)))
+            .service(web::resource("/approve").route(web::post().to(approve)))
     })
     .bind("localhost:9001")?
     .run()

@@ -10,3 +10,8 @@ edition = "2018"
 actix-web = "2"
 actix-rt = "1"
 tera = "*"
+redis = "*"
+redis_client = { path = "../redis_client" }
+uuid = { version = "0.8", features = ["serde", "v4"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
