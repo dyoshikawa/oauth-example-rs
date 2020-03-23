@@ -1,10 +1,12 @@
-use actix_web::{error, middleware, web, App, Error, HttpResponse, HttpServer};
+use actix_web::{error, http::header, middleware, web, App, Error, HttpResponse, HttpServer};
+use redis::Commands;
+use redis_client::create_connection;
+use serde::{Deserialize, Serialize};
+use serde_json;
 use std::collections::HashMap;
 use tera::Tera;
+use url::Url;
 use uuid::Uuid;
-use redis_client::create_connection;
-use redis::Commands;
-use serde_json;
 
 #[derive(Debug, Clone, PartialEq)]
 struct Client {
@@ -107,18 +109,89 @@ async fn authorize(
     }
 }
 
-async fn approve(
-    tmpl: web::Data<tera::Tera>,
-    body: web::Form<HashMap<String, String>>,
-) -> Result<HttpResponse, Error> {
+#[derive(Serialize, Deserialize)]
+struct User {}
+
+#[derive(Serialize, Deserialize)]
+struct ApproveParams {
+    authorization_endpoint_request: HashMap<String, String>,
+    scope: Vec<String>,
+    user: Option<User>,
+}
+
+async fn approve(body: web::Form<HashMap<String, String>>) -> Result<HttpResponse, Error> {
     println!("{:?}", body);
 
-    let mut ctx = tera::Context::new();
-    let s = tmpl
-        .render("approve.html", &ctx)
+    let reqid = body.get("reqid").cloned().unwrap_or("".to_string());
+    let mut redis_con = create_connection();
+    let query_str: String = redis_con
+        .get(&reqid)
         .map_err(|e| error::ErrorInternalServerError(e))?;
+    let query = serde_json::from_str::<HashMap<String, String>>(query_str.as_str())
+        .map_err(|e| error::ErrorInternalServerError(e))?;
+    let _: () = redis_con.del(&reqid).expect("Failed delete");
 
-    Ok(HttpResponse::Ok().content_type("text/html").body(s))
+    match query.get("redirect_uri") {
+        None => Err(error::ErrorInternalServerError("Undefined redirect_uri")),
+        Some(redirect_uri) => match query.get("approve") {
+            None => Ok(HttpResponse::TemporaryRedirect()
+                .header(
+                    header::LOCATION,
+                    Url::parse_with_params(redirect_uri, vec![("error", "access_denied")])
+                        .unwrap()
+                        .as_str(),
+                )
+                .finish()),
+            Some(_) => {
+                let response_type = query
+                    .get("response_type")
+                    .cloned()
+                    .unwrap_or("".to_string());
+                if response_type != "code".to_string() {
+                    return Ok(HttpResponse::TemporaryRedirect()
+                        .header(
+                            header::LOCATION,
+                            Url::parse_with_params(
+                                redirect_uri,
+                                vec![("error", "unsupported_response_type")],
+                            )
+                            .unwrap()
+                            .as_str(),
+                        )
+                        .finish());
+                }
+
+                let code = Uuid::new_v4().to_string();
+                // TODO scope, user
+                let approve_params = ApproveParams {
+                    authorization_endpoint_request: query.clone(),
+                    scope: vec![],
+                    user: None,
+                };
+
+                let _: () = redis_con
+                    .set(
+                        format!("code_{}", &code),
+                        serde_json::to_string(&approve_params).unwrap(),
+                    )
+                    .unwrap();
+
+                let state = query.get("state").cloned().unwrap_or("".to_string());
+
+                Ok(HttpResponse::TemporaryRedirect()
+                    .header(
+                        header::LOCATION,
+                        Url::parse_with_params(
+                            redirect_uri,
+                            vec![("code", &code), ("state", &state)],
+                        )
+                        .unwrap()
+                        .as_str(),
+                    )
+                    .finish())
+            }
+        },
+    }
 }
 
 #[actix_rt::main]
