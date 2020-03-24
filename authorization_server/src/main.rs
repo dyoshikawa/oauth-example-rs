@@ -204,13 +204,6 @@ async fn approve(body: web::Form<HashMap<String, String>>) -> Result<HttpRespons
     }
 }
 
-#[derive(Serialize, Deserialize)]
-struct TokenResponse {
-    access_token: String,
-    token_type: String,
-    scope: Vec<String>,
-}
-
 async fn token(
     query: web::Query<HashMap<String, String>>,
     body: web::Json<HashMap<String, String>>,
@@ -271,16 +264,46 @@ async fn token(
 
             let code = body.get("code").cloned().unwrap_or("".to_string());
             let mut con = create_connection();
+            let redis_key = format!("code_{}", &code);
             let code_params_str: String = con
-                .get(format!("code_{}", &code))
+                .get(&redis_key)
                 .map_err(|e| error::ErrorInternalServerError(json! {{"error": e.to_string()}}))?;
+            let code_params = serde_json::from_str::<ApproveParams>(&code_params_str)
+                .map_err(|e| error::ErrorInternalServerError(json! {{"error": e.to_string()}}))?;
+            let _: () = con
+                .del(&redis_key)
+                .map_err(|e| error::ErrorInternalServerError(json! {{"error": e.to_string()}}))?;
+            let code_param_client_id = code_params
+                .authorization_endpoint_request
+                .get("client_id")
+                .cloned()
+                .unwrap_or("".to_string());
+            if code_param_client_id != client_id {
+                println!(
+                    "Client mismatch, expected {} got {}",
+                    code_param_client_id, &client_id
+                );
+                return Err(error::ErrorBadRequest(json! {{"error": "invalid_grant"}}));
+            }
 
-            let token_response = TokenResponse {
-                access_token: "".to_string(),
-                token_type: "".to_string(),
-                scope: vec!["".to_string()],
+            let access_token = Uuid::new_v4().to_string();
+            let cscope = if code_params.scope.is_empty() {
+                "".to_string()
+            } else {
+                code_params.scope.join(" ")
             };
-            Ok(HttpResponse::Ok().json(token_response))
+
+            // TODO
+            // nosql.insert({ access_token: access_token, client_id: clientId, scope: cscope });
+
+            println!("Issuing access token {}", access_token);
+            println!("with scope {}", &cscope);
+
+            Ok(HttpResponse::Ok().json(json! {{
+            "access_token": &access_token,
+            "token_type": "Bearer",
+            "scope": &cscope,
+            }}))
         }
     }
 }
