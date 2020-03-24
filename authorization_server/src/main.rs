@@ -1,9 +1,10 @@
 use actix_web::{error, http::header, middleware, web, App, Error, HttpResponse, HttpServer};
-use base64::encode;
+use base64;
 use redis::Commands;
 use redis_client::create_connection;
 use serde::{Deserialize, Serialize};
 use serde_json;
+use serde_json::json;
 use std::collections::HashMap;
 use tera::Tera;
 use url::Url;
@@ -31,6 +32,14 @@ fn constants() -> Constants {
             scope: "foo bar".to_string(),
         }],
     }
+}
+
+fn get_client(client_id: &String) -> Option<Client> {
+    constants()
+        .clients
+        .into_iter()
+        .find(|c| c.client_id == *client_id)
+        .clone()
 }
 
 fn is_different_scope(rscope: Vec<String>, cscope: Vec<String>) -> bool {
@@ -202,25 +211,74 @@ struct TokenResponse {
     scope: Vec<String>,
 }
 
-async fn token(query: web::Query<HashMap<String, String>>) -> Result<HttpResponse, Error> {
+async fn token(
+    query: web::Query<HashMap<String, String>>,
+    body: web::Json<HashMap<String, String>>,
+) -> Result<HttpResponse, Error> {
     let auth = query
         .get("authorization")
         .cloned()
         .unwrap_or("".to_string());
+    let mut client_id = "".to_string();
+    let mut client_secret = "".to_string();
     if auth != "".to_string() {
-        let client_credentials = auth
+        let decoded_auth = base64::decode(&auth)
+            .map_err(|e| error::ErrorInternalServerError(json! {{"error": e.to_string()}}))?
+            .iter()
+            .map(|&s| s as char)
+            .collect::<String>();
+        let client_credentials = decoded_auth
             .split(' ')
             .collect::<Vec<&str>>()
             .iter()
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
-    }
-    let token_response = TokenResponse {
-        access_token: "".to_string(),
-        token_type: "".to_string(),
-        scope: vec!["".to_string()],
+        client_id = client_credentials[0].clone();
+        client_secret = client_credentials[1].clone();
     };
-    Ok(HttpResponse::Ok().json(token_response))
+
+    // otherwise, check the post body
+    if body.get("client_id").is_some() {
+        if client_id != "" {
+            println!("Client attempted to authenticate with multiple methods");
+            return Err(error::ErrorBadRequest(json! {{"error": "invalid_client"}}));
+        }
+
+        client_id = body.get("client_id").unwrap().clone();
+        client_secret = body
+            .get("client_secret")
+            .expect("Undefined client_secret")
+            .clone();
+    }
+
+    let client = get_client(&client_id);
+    match client {
+        None => {
+            println!("Unknown client {}", client_id);
+            Err(error::ErrorBadRequest(json! {{"error": "invalid_client"}}))
+        }
+        Some(client) => {
+            if client.client_secret != client_secret {
+                return Err(error::ErrorBadRequest(json! {{"error": "invalid_client"}}));
+            }
+
+            let grant_type = body.get("grant_type").cloned().unwrap_or("".to_string());
+            if grant_type != "authorization_code" {}
+
+            let code = body.get("code").cloned().unwrap_or("".to_string());
+            let mut con = create_connection();
+            let code_params_str: String = con
+                .get(format!("code_{}", &code))
+                .map_err(|e| error::ErrorInternalServerError(json! {{"error": e.to_string()}}))?;
+
+            let token_response = TokenResponse {
+                access_token: "".to_string(),
+                token_type: "".to_string(),
+                scope: vec!["".to_string()],
+            };
+            Ok(HttpResponse::Ok().json(token_response))
+        }
+    }
 }
 
 #[actix_rt::main]
