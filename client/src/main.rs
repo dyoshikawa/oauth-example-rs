@@ -55,7 +55,7 @@ async fn authorize() -> Result<HttpResponse, Error> {
     .map_err(|e| error::ErrorInternalServerError(e))?
     .to_string();
 
-    Ok(HttpResponse::TemporaryRedirect()
+    Ok(HttpResponse::SeeOther()
         .header(header::LOCATION, target_uri)
         .finish())
 }
@@ -75,6 +75,7 @@ async fn callback(
     tmpl: web::Data<tera::Tera>,
     query: web::Query<HashMap<String, String>>,
 ) -> Result<HttpResponse, Error> {
+    println!("Access callback");
     match query.get("error").cloned() {
         Some(error) => Err(error::ErrorInternalServerError(error)),
         None => {

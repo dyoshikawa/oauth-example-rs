@@ -144,7 +144,7 @@ async fn approve(body: web::Form<HashMap<String, String>>) -> Result<HttpRespons
     match query.get("redirect_uri") {
         None => Err(error::ErrorInternalServerError("Undefined redirect_uri")),
         Some(redirect_uri) => match body.get("approve") {
-            None => Ok(HttpResponse::TemporaryRedirect()
+            None => Ok(HttpResponse::SeeOther()
                 .header(
                     header::LOCATION,
                     Url::parse_with_params(redirect_uri, vec![("error", "access_denied")])
@@ -153,12 +153,13 @@ async fn approve(body: web::Form<HashMap<String, String>>) -> Result<HttpRespons
                 )
                 .finish()),
             Some(_) => {
+                println!("redirect_uri: {}", redirect_uri);
                 let response_type = query
                     .get("response_type")
                     .cloned()
                     .unwrap_or("".to_string());
                 if response_type != "code".to_string() {
-                    return Ok(HttpResponse::TemporaryRedirect()
+                    return Ok(HttpResponse::SeeOther()
                         .header(
                             header::LOCATION,
                             Url::parse_with_params(
@@ -188,7 +189,7 @@ async fn approve(body: web::Form<HashMap<String, String>>) -> Result<HttpRespons
 
                 let state = query.get("state").cloned().unwrap_or("".to_string());
 
-                Ok(HttpResponse::TemporaryRedirect()
+                Ok(HttpResponse::SeeOther()
                     .header(
                         header::LOCATION,
                         Url::parse_with_params(
