@@ -95,7 +95,7 @@ async fn callback(
 
             println!("Requesting access token for code {}", &code);
 
-            let req_client = reqwest::blocking::Client::new();
+            let req_client = reqwest::Client::new();
             let token_res = req_client
                 .post(constants().token_endpoint.clone().as_str())
                 .header(header::CONTENT_TYPE, "application/json")
@@ -109,11 +109,12 @@ async fn callback(
                 )
                 .body(post_data)
                 .send()
+                .await
                 .map_err(|e| error::ErrorInternalServerError(e))?;
-            let parsed_res: HashMap<String, String> =
-                token_res
-                    .json::<HashMap<String, String>>()
-                    .map_err(|e| error::ErrorInternalServerError(e))?;
+            let parsed_res: HashMap<String, String> = token_res
+                .json::<HashMap<String, String>>()
+                .await
+                .map_err(|e| error::ErrorInternalServerError(e))?;
             let access_token = parsed_res
                 .get("access_token")
                 .expect("Undefined access_token")
@@ -123,9 +124,9 @@ async fn callback(
             let mut ctx = tera::Context::new();
             ctx.insert(
                 "access_token",
-                query.get("access_token").unwrap_or(&"None".to_string()),
+                &access_token
             );
-            ctx.insert("scope", query.get("scope").unwrap_or(&"None".to_string()));
+            ctx.insert("scope", "None");
             Ok(HttpResponse::Ok().content_type("text/html").body(
                 tmpl.render("index.html", &ctx)
                     .map_err(|e| error::ErrorInternalServerError(e))?,

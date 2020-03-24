@@ -206,23 +206,29 @@ async fn approve(body: web::Form<HashMap<String, String>>) -> Result<HttpRespons
 }
 
 async fn token(
-    query: web::Query<HashMap<String, String>>,
+    req: web::HttpRequest,
     body: web::Json<HashMap<String, String>>,
 ) -> Result<HttpResponse, Error> {
-    let auth = query
-        .get("authorization")
-        .cloned()
-        .unwrap_or("".to_string());
+    let auth = req
+        .headers()
+        .get(header::AUTHORIZATION)
+        .ok_or(error::ErrorBadRequest(
+            json! {{"error": "undefined_authorization"}},
+        ))?
+        .as_bytes()
+        .iter()
+        .map(|&s| s as char)
+        .collect::<String>();
     let mut client_id = "".to_string();
     let mut client_secret = "".to_string();
     if auth != "".to_string() {
-        let decoded_auth = base64::decode(&auth)
+        let decoded_auth = base64::decode(auth.split(" ").collect::<Vec<&str>>()[1])
             .map_err(|e| error::ErrorInternalServerError(json! {{"error": e.to_string()}}))?
             .iter()
             .map(|&s| s as char)
             .collect::<String>();
         let client_credentials = decoded_auth
-            .split(' ')
+            .split(":")
             .collect::<Vec<&str>>()
             .iter()
             .map(|s| s.to_string())
@@ -299,6 +305,7 @@ async fn token(
 
             println!("Issuing access token {}", access_token);
             println!("with scope {}", &cscope);
+            println!("Issued tokens for code {}", &code);
 
             Ok(HttpResponse::Ok().json(json! {{
             "access_token": &access_token,
