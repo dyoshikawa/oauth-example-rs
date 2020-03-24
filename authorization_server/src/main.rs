@@ -263,7 +263,11 @@ async fn token(
             }
 
             let grant_type = body.get("grant_type").cloned().unwrap_or("".to_string());
-            if grant_type != "authorization_code" {}
+            if grant_type != "authorization_code" {
+                return Err(error::ErrorBadRequest(
+                    json! {{"error": "unsupported_grant_type"}},
+                ));
+            }
 
             let code = body.get("code").cloned().unwrap_or("".to_string());
             let mut con = create_connection();
